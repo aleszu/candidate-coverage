@@ -15,6 +15,7 @@ library(yarrr)  #Pirate plot
 library(igraph) #ngram network diagrams
 library(ggraph)
 library(tidyverse)
+library(topicmodels)
 
 my_colors <- c("#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#D55E00", "#D65E00")
 
@@ -27,7 +28,10 @@ theme_plots <- function(aticks = element_blank(),
 undesirable_words <- c("harris", "harris’s", "harris's", "booker", "booker’s", "booker's", "warren",
                        "warren’s", "warren's", "sanders", "sanders’", "sanders’s", "gillibrand",
                        "gillibrand’s", "gillibrand's", "warren's", "klobuchar", "klobuchar’s",
-                       "klobuchar's", "des", "moines", "president", "campaign", "san", "mccain") 
+                       "klobuchar's", "des", "moines", "president", "campaign", "san", "mccain",
+                       "kamala", "bernie", "kirsten", "elizabeth", "amy", "cory", "democratic",
+                       "senator", "democrats", "candidates", "political", "presidential", "voters",
+                       "sen", "rep") 
 
 tidy_coverage <- coverage_data %>%
   unnest_tokens(word, text) %>% #Break the text into individual words
@@ -35,12 +39,14 @@ tidy_coverage <- coverage_data %>%
   filter(!nchar(word) < 3) %>% #Short words
   anti_join(stop_words) #Data provided by the tidytext package
 
+#MOST USED WORDS
 harris_words <- tidy_coverage %>%
   filter(candidate == "Harris") %>%
   count(word, sort = TRUE) 
 
-harris_words %>% print(n = 40)
+harris_words %>% print(n = 50)
 
+#UNIQUE WORDS
 tf_idf_words <- tidy_coverage %>% 
   count(word, candidate, sort = TRUE) %>%
   bind_tf_idf(word, candidate, n) %>%
@@ -54,12 +60,14 @@ top_tf_idf_words <- tf_idf_words %>%
 ggplot(top_tf_idf_words, aes(x = reorder(word, n), y = n, fill = candidate)) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~candidate, scales = "free") +
+  xlab(NULL) + ylab(NULL) +
   coord_flip() + 
   ggtitle("Unique Words By Candidate") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), text=element_text(family = "Helvetica"),
         plot.title = element_text(hjust = 0.5, face = "bold"))
 
+#SENTIMENT ANALYSIS
 tidy_coverage %>%
   filter(candidate == "Gillibrand") %>%
   inner_join(get_sentiments("bing")) %>% # pull out only sentiment words
@@ -77,11 +85,37 @@ coverage_polarity_candidate <- coverage_bing %>%
          percent_positive = positive / (positive + negative) * 100)
 
 coverage_polarity_candidate %>%
-  ggplot(aes(candidate, polarity, fill = ifelse(polarity >= 0,my_colors[5],my_colors[4]))) +
+  ggplot(aes(reorder(candidate, polarity), polarity, fill = ifelse(polarity >= 0,my_colors[5],my_colors[4]))) +
   geom_col(show.legend = FALSE) +
-  xlab("Candidates") + ylab(NULL) +
-  ggtitle("Sentiment by Candidate") +
+  xlab(NULL) + ylab("Net sentiment of words used") +
+  coord_flip() +
+  ggtitle("Media Sentiment by Candidate") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), text=element_text(family = "Helvetica"), 
         plot.title = element_text(hjust = 0.5, face = "bold"))
 
+#TOPIC MODELING
+coverage_dtm <- coverage_data %>%
+  unnest_tokens(word, text) %>%
+  filter(!word %in% undesirable_words) %>% #Remove undesirables
+  filter(!nchar(word) < 3) %>% #Short words
+  anti_join(stop_words) %>% #Data provided by the tidytext package
+  count(candidate, word) %>%
+  cast_dtm(candidate, word, n)
+
+coverage_lda <- LDA(coverage_dtm, k = 10, control = list(seed = 1234))
+
+coverage_topics <- tidy(coverage_lda, matrix = "beta")
+
+coverage_top_terms <- coverage_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+coverage_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
