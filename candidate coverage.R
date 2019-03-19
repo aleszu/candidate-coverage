@@ -18,6 +18,7 @@ library(tidyverse)
 library(topicmodels)
 
 my_colors <- c("#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#D55E00", "#D65E00")
+storybench.colors <- c("azure4", "chocolate2", "cornflowerblue", "firebrick3")
 
 theme_plots <- function(aticks = element_blank(),
                          pgminor = element_blank(),
@@ -31,7 +32,8 @@ undesirable_words <- c("harris", "harris’s", "harris's", "booker", "booker’s
                        "klobuchar's", "des", "moines", "president", "campaign", "san", "mccain",
                        "kamala", "bernie", "kirsten", "elizabeth", "amy", "cory", "democratic",
                        "senator", "democrats", "candidates", "political", "presidential", "voters",
-                       "sen", "rep") 
+                       "sen", "rep", "beto", "o’rourke", "o'rourke", "o'rourke's", "o’rourke’s",
+                       "rourke", "rourke's", "rourke’s") 
 
 tidy_coverage <- coverage_data %>%
   unnest_tokens(word, text) %>% #Break the text into individual words
@@ -67,6 +69,58 @@ ggplot(top_tf_idf_words, aes(x = reorder(word, n), y = n, fill = candidate)) +
         panel.background = element_blank(), text=element_text(family = "Helvetica"),
         plot.title = element_text(hjust = 0.5, face = "bold"))
 
+harris_idf_words <- tf_idf_words %>% 
+  group_by(candidate) %>%
+  filter(candidate == "Harris") %>%
+  top_n(10) %>%
+  ungroup()
+
+sanders_idf_words <- tf_idf_words %>% 
+  group_by(candidate) %>%
+  filter(candidate == "Sanders") %>%
+  top_n(10) %>%
+  ungroup()
+
+warren_idf_words <- tf_idf_words %>% 
+  group_by(candidate) %>%
+  filter(candidate == "Warren") %>%
+  top_n(10) %>%
+  ungroup()
+
+klobuchar_idf_words <- tf_idf_words %>% 
+  group_by(candidate) %>%
+  filter(candidate == "Klobuchar") %>%
+  top_n(10) %>%
+  ungroup()
+
+gillibrand_idf_words <- tf_idf_words %>% 
+  group_by(candidate) %>%
+  filter(candidate == "Gillibrand") %>%
+  top_n(10) %>%
+  ungroup()
+
+booker_idf_words <- tf_idf_words %>% 
+  group_by(candidate) %>%
+  filter(candidate == "Booker") %>%
+  top_n(10) %>%
+  ungroup()
+
+orourke_idf_words <- tf_idf_words %>% 
+  group_by(candidate) %>%
+  filter(candidate == "O'Rourke") %>%
+  top_n(10) %>%
+  ungroup()
+  
+ggplot(orourke_idf_words, aes(x = reorder(word, n), y = n)) +
+  geom_col(show.legend = FALSE, fill = storybench.colors[3]) +
+  xlab(NULL) + ylab(NULL) +
+  coord_flip() + 
+  ggtitle("Beto O'Rourke") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), text=element_text(family = "Helvetica"),
+        plot.title = element_text(hjust = 0.5, face = "bold"))  
+
+
 #SENTIMENT ANALYSIS
 tidy_coverage %>%
   filter(candidate == "Gillibrand") %>%
@@ -78,16 +132,49 @@ tidy_coverage %>%
 coverage_bing <- tidy_coverage %>%
   inner_join(get_sentiments("bing"))
 
-coverage_polarity_candidate <- coverage_bing %>%
+coverage_sentiment_candidates <- coverage_bing %>%
   count(sentiment, candidate) %>%
   spread(sentiment, n, fill = 0) %>%
   mutate(polarity = positive - negative,
          percent_positive = positive / (positive + negative) * 100)
 
-coverage_polarity_candidate %>%
+coverage_sentiment_candidates %>%
   ggplot(aes(reorder(candidate, polarity), polarity, fill = ifelse(polarity >= 0,my_colors[5],my_colors[4]))) +
   geom_col(show.legend = FALSE) +
   xlab(NULL) + ylab("Net sentiment of words used") +
+  coord_flip() +
+  ggtitle("Media Sentiment by Candidate") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), text=element_text(family = "Helvetica"), 
+        plot.title = element_text(hjust = 0.5, face = "bold"))
+
+coverage_sentiment_candidates %>%
+  ggplot(aes(reorder(candidate, percent_positive), percent_positive)) +
+  geom_col(show.legend = FALSE, fill = storybench.colors[3]) +
+  xlab(NULL) + ylab("Percentage of positive words used") +
+  coord_flip() +
+  ggtitle("Media Sentiment by Candidate") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), text=element_text(family = "Helvetica"), 
+        plot.title = element_text(hjust = 0.5, face = "bold"))
+
+#LABMT SENTIMENT
+labmt_sentiments <- read.csv("https://raw.githubusercontent.com/aleszu/textanalysis-shiny/master/labMT2english.csv", sep="\t")
+
+labMT <- labmt_sentiments %>%
+  select(word, happs)
+
+all_labmt_sentiment <- tidy_coverage %>%  
+  inner_join(labMT, by = "word") %>%
+  group_by(candidate) %>% 
+  summarize(sentiment = mean(happs)) %>%
+  arrange(desc(sentiment)) %>%
+  mutate("score" = sentiment-5.372) 
+
+all_labmt_sentiment %>%
+  ggplot(aes(reorder(candidate, score), score)) +
+  geom_col(show.legend = FALSE, fill = "lightgreen") +
+  xlab(NULL) + ylab("Mean sentiment of words used") +
   coord_flip() +
   ggtitle("Media Sentiment by Candidate") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
