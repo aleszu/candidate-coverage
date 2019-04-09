@@ -33,7 +33,7 @@ undesirable_words <- c("harris", "harris’s", "harris's", "booker", "booker’s
                        "kamala", "bernie", "kirsten", "elizabeth", "amy", "cory", "democratic",
                        "senator", "democrats", "candidates", "political", "presidential", "voters",
                        "sen", "rep", "beto", "o’rourke", "o'rourke", "o'rourke's", "o’rourke’s",
-                       "rourke", "rourke's", "rourke’s") 
+                       "rourke", "rourke's", "rourke’s", "äôs", "2020", "äôt") 
 
 tidy_coverage <- coverage_data %>%
   unnest_tokens(word, text) %>% #Break the text into individual words
@@ -42,11 +42,10 @@ tidy_coverage <- coverage_data %>%
   anti_join(stop_words) #Data provided by the tidytext package
 
 #MOST USED WORDS
-harris_words <- tidy_coverage %>%
-  filter(candidate == "Harris") %>%
+most_used_words <- tidy_coverage %>%
   count(word, sort = TRUE) 
 
-harris_words %>% print(n = 50)
+most_used_words %>% print(n = 50)
 
 #UNIQUE WORDS
 tf_idf_words <- tidy_coverage %>% 
@@ -111,11 +110,11 @@ orourke_idf_words <- tf_idf_words %>%
   top_n(10) %>%
   ungroup()
   
-ggplot(orourke_idf_words, aes(x = reorder(word, n), y = n)) +
+ggplot(harris_idf_words, aes(x = reorder(word, n), y = n)) +
   geom_col(show.legend = FALSE, fill = storybench.colors[3]) +
   xlab(NULL) + ylab(NULL) +
   coord_flip() + 
-  ggtitle("Beto O'Rourke") +
+  ggtitle("Kamala Harris") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), text=element_text(family = "Helvetica"),
         plot.title = element_text(hjust = 0.5, face = "bold"))  
@@ -158,6 +157,111 @@ coverage_sentiment_candidates %>%
         panel.background = element_blank(), text=element_text(family = "Helvetica"), 
         plot.title = element_text(hjust = 0.5, face = "bold"))
 
+
+#LOCAL COVERAGE ANALYSIS
+local_data <- read.csv('local_coverage.csv', stringsAsFactors = FALSE, row.names = NULL)
+
+tidy_local <- local_data %>%
+  unnest_tokens(word, text) %>% #Break the text into individual words
+  filter(!word %in% undesirable_words) %>% #Remove undesirables
+  filter(!nchar(word) < 3) %>% #Short words
+  anti_join(stop_words) #Data provided by the tidytext package
+
+local_most_used_words <- tidy_local %>%
+  count(word, sort = TRUE) 
+
+local_most_used_words %>% print(n = 50)
+
+national_most_used_words <- tidy_coverage %>%
+  count(word, sort = TRUE) 
+
+national_most_used_words %>% print(n = 50)
+
+local_tf_idf_words <- tidy_local %>% 
+  count(word, candidate, sort = TRUE) %>%
+  bind_tf_idf(word, candidate, n) %>%
+  arrange(desc(tf_idf)) 
+
+top_local_tf_idf_words <- local_tf_idf_words %>% #This returns too many to be useful rn
+  group_by(candidate) %>%
+  top_n(10) %>%
+  ungroup()
+
+head(top_local_tf_idf_words)
+
+ggplot(top_local_tf_idf_words, aes(x = reorder(word, n), y = n, fill = candidate)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~candidate, scales = "free") +
+  xlab(NULL) + ylab(NULL) +
+  coord_flip() + 
+  ggtitle("LOCAL Unique Words By Candidate") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), text=element_text(family = "Helvetica"),
+        plot.title = element_text(hjust = 0.5, face = "bold"))
+
+local_bing <- tidy_local %>%
+  inner_join(get_sentiments("bing"))
+
+local_sentiment_candidates <- local_bing %>%
+  count(sentiment, candidate) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(polarity = positive - negative,
+         percent_positive = positive / (positive + negative) * 100) %>%
+  filter(candidate == "Warren" | candidate == "Sanders" | candidate == "Harris" | candidate == "Booker" | candidate == "Klobuchar")
+
+
+
+local_sentiment_candidates %>%
+  ggplot(aes(reorder(candidate, polarity), polarity, fill = ifelse(polarity >= 0,my_colors[5],my_colors[4]))) +
+  geom_col(show.legend = FALSE) +
+  xlab(NULL) + ylab("Net sentiment of words used") +
+  coord_flip() +
+  ggtitle("Local Media Sentiment by Candidate") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), text=element_text(family = "Helvetica"), 
+        plot.title = element_text(hjust = 0.5, face = "bold"))
+
+local_sentiment_candidates %>%
+  ggplot(aes(reorder(candidate, percent_positive), percent_positive)) +
+  geom_col(show.legend = FALSE, fill = storybench.colors[3]) +
+  xlab(NULL) + ylab("Percentage of positive words used") +
+  coord_flip() +
+  ggtitle("Local Media Sentiment by Candidate") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), text=element_text(family = "Helvetica"), 
+        plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+local_sanders_idf_words <- local_tf_idf_words %>% 
+  group_by(candidate) %>%
+  filter(candidate == "Sanders") %>%
+  top_n(10) %>%
+  ungroup()
+
+local_warren_idf_words <- local_tf_idf_words %>% 
+  group_by(candidate) %>%
+  filter(candidate == "Warren") %>%
+  top_n(10) %>%
+  ungroup()
+
+local_booker_idf_words <- local_tf_idf_words %>% 
+  group_by(candidate) %>%
+  filter(candidate == "Booker") %>%
+  top_n(5) %>%
+  ungroup()
+
+ggplot(local_warren_idf_words, aes(x = reorder(word, n), y = n)) +
+  geom_col(show.legend = FALSE, fill = storybench.colors[3]) +
+  xlab(NULL) + ylab(NULL) +
+  coord_flip() + 
+  ggtitle("Elizabeth Warren: Local Coverage") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), text=element_text(family = "Helvetica"),
+        plot.title = element_text(hjust = 0.5, face = "bold"))  
+
+
+#STUFF I DONT REALLY NEED BUT WANT JUST IN CASE
+
 #LABMT SENTIMENT
 labmt_sentiments <- read.csv("https://raw.githubusercontent.com/aleszu/textanalysis-shiny/master/labMT2english.csv", sep="\t")
 
@@ -181,7 +285,7 @@ all_labmt_sentiment %>%
         panel.background = element_blank(), text=element_text(family = "Helvetica"), 
         plot.title = element_text(hjust = 0.5, face = "bold"))
 
-#TOPIC MODELING
+#Topic modeling
 coverage_dtm <- coverage_data %>%
   unnest_tokens(word, text) %>%
   filter(!word %in% undesirable_words) %>% #Remove undesirables
