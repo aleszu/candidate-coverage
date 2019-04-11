@@ -35,6 +35,19 @@ undesirable_words <- c("harris", "harris’s", "harris's", "booker", "booker’s
                        "sen", "rep", "beto", "o’rourke", "o'rourke", "o'rourke's", "o’rourke’s",
                        "rourke", "rourke's", "rourke’s", "äôs", "2020", "äôt") 
 
+coverage_data <- coverage_data %>%  # fix duplicate HuffPost names
+  mutate(outlet = dplyr::case_when(
+    outlet == "Huffington Post" ~ "The Huffington Post",
+    outlet == "The Huffington Post" ~ "The Huffington Post",
+    outlet == "CNN" ~ "CNN",
+    outlet == "Fox News" ~ "Fox News",
+    outlet == "New York Times" ~ "New York Times",
+    outlet == "Washington Post" ~ "The Washington Post",
+  ))
+
+glimpse(coverage_data)
+table(coverage_data$outlet) 
+
 tidy_coverage <- coverage_data %>%
   unnest_tokens(word, text) %>% #Break the text into individual words
   filter(!word %in% undesirable_words) %>% #Remove undesirables
@@ -156,6 +169,18 @@ coverage_sentiment_candidates %>%
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), text=element_text(family = "Helvetica"), 
         plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+#LOOK AT SENTIMENT BY CANDIDATE AND OUTLET
+coverage_sentiment_by_outlet <- coverage_bing %>%
+  count(sentiment, candidate, outlet) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(polarity = positive - negative,
+         percent_positive = positive / (positive + negative) * 100)
+
+ggplot(coverage_sentiment_by_outlet, aes(reorder(candidate, percent_positive), percent_positive)) +
+  geom_col() + coord_flip() + facet_wrap(~outlet)
+
 
 
 #LOCAL COVERAGE ANALYSIS
