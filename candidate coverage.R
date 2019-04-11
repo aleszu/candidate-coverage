@@ -35,6 +35,19 @@ undesirable_words <- c("harris", "harris’s", "harris's", "booker", "booker’s
                        "sen", "rep", "beto", "o’rourke", "o'rourke", "o'rourke's", "o’rourke’s",
                        "rourke", "rourke's", "rourke’s", "äôs", "2020", "äôt") 
 
+coverage_data <- coverage_data %>%  # fix duplicate HuffPost names
+  mutate(outlet = dplyr::case_when(
+    outlet == "Huffington Post" ~ "The Huffington Post",
+    outlet == "The Huffington Post" ~ "The Huffington Post",
+    outlet == "CNN" ~ "CNN",
+    outlet == "Fox News" ~ "Fox News",
+    outlet == "New York Times" ~ "New York Times",
+    outlet == "Washington Post" ~ "The Washington Post",
+  ))
+
+glimpse(coverage_data)
+table(coverage_data$outlet) # Notice it's fixed
+
 tidy_coverage <- coverage_data %>%
   unnest_tokens(word, text) %>% #Break the text into individual words
   filter(!word %in% undesirable_words) %>% #Remove undesirables
